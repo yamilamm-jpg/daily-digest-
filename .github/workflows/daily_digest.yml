@@ -1,6 +1,6 @@
 name: Daily News Digest
 
-  on:
+  "on":
     schedule:
       - cron: '30 6 * * *'
     workflow_dispatch:
