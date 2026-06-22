@@ -1,27 +1,26 @@
 name: Daily News Digest
 
-on:
-  schedule:
-    # 6:30 UTC = 8:30 CEST (verano España, UTC+2)
-    # En invierno (CET, UTC+1) llegaría a las 7:30 — ajusta a 7:30 UTC si prefieres invierno
-    - cron: '30 6 * * *'
-  workflow_dispatch:  # permite lanzarlo manualmente desde GitHub (móvil o web)
+  on:
+    schedule:
+      - cron: '30 6 * * *'
+    workflow_dispatch:
 
-jobs:
-  digest:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+  jobs:
+    digest:
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
+        - uses: actions/setup-python@v5
+          with:
+            python-version: '3.11'
 
-      - name: Instalar dependencias
-        run: pip install -r requirements.txt
+        - name: Instalar dependencias
+          run: pip install -r requirements.txt
 
-      - name: Enviar resumen
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python digest.py
+        - name: Enviar resumen
+          env:
+            TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+            TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
+            GEMINI_API_KEY:     ${{ secrets.GEMINI_API_KEY }}
+          run: python digest.py
