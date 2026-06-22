@@ -49,7 +49,7 @@ X_ACCOUNTS = [
     'long_equity', 'jorgecriptan', 'AlvargonzalezV', 'healthy_pockets',
     'lookonchain', 'whale_alert', 'FinanzasDeChill', 'JoshMandell6',
     'Metaplanet', 'gerovich', 'adam3us', 'EneaDenkt',
-    'alexditoinvest', 'InversionFundam', 'elonmusk', 'realDonaldTrump',
+    'alexditoinvest', 'InversionFundam', 'elonmusk', 'realDonaldTrump', 'capitalwars',
 ]
 
 DAYS_ES   = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
