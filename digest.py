@@ -33,6 +33,10 @@ FEEDS = {
     'POLÍTICA / EEUU': [
         ('White House',  'https://www.whitehouse.gov/news/feed/'),
     ],
+      ' ANÁLISIS': [
+          ('Pablo Gil',      'https://pablogiltrader.substack.com/feed'),
+          ('Michael Howell', 'https://capitalwars.substack.com/feed'),
+      ],
 }
 
 NITTER_INSTANCES = [
