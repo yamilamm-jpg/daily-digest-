@@ -1,39 +1,40 @@
 import feedparser
 import requests
+import google.generativeai as genai
 from datetime import datetime, timezone, timedelta
 import os
 import time
 
-TELEGRAM_TOKEN = os.environ['TELEGRAM_BOT_TOKEN']
+TELEGRAM_TOKEN  = os.environ['TELEGRAM_BOT_TOKEN']
 TELEGRAM_CHAT_ID = os.environ['TELEGRAM_CHAT_ID']
+GEMINI_API_KEY  = os.environ['GEMINI_API_KEY']
 
-HOURS_BACK = 20
-MAX_PER_SECTION = 4
+HOURS_BACK       = 20
+MAX_PER_SECTION  = 6
 
 FEEDS = {
-    '🌍 MACROECONOMÍA': [
+    'MACROECONOMÍA': [
         ('Reuters',      'https://feeds.reuters.com/reuters/businessNews'),
         ('BBC Business', 'https://feeds.bbci.co.uk/news/business/rss.xml'),
         ('FT',           'https://www.ft.com/rss/home/uk'),
     ],
-    '📈 MERCADOS': [
+    'MERCADOS': [
         ('Expansión',    'https://www.expansion.com/rss/mercados.xml'),
         ('El Economista','https://www.eleconomista.es/rss/rss-mercados.php'),
         ('MarketWatch',  'https://feeds.marketwatch.com/marketwatch/topstories/'),
         ('CNBC',         'https://www.cnbc.com/id/10000664/device/rss/rss.html'),
     ],
-    '₿ CRIPTO': [
+    'CRIPTO': [
         ('CoinDesk',     'https://www.coindesk.com/arc/outboundfeeds/rss/'),
         ('CoinTelegraph','https://cointelegraph.com/rss'),
         ('The Block',    'https://www.theblock.co/rss.xml'),
         ('Decrypt',      'https://decrypt.co/feed'),
     ],
-    '🏛 POLÍTICA / EEUU': [
+    'POLÍTICA / EEUU': [
         ('White House',  'https://www.whitehouse.gov/news/feed/'),
     ],
 }
 
-# Public Nitter instances (tried in order, first working one is used)
 NITTER_INSTANCES = [
     'nitter.privacydev.net',
     'nitter.poast.org',
@@ -108,10 +109,8 @@ def fetch_tweets(instance, cutoff):
                     continue
                 title = entry.get('title', '').strip()
                 link  = entry.get('link',  '').strip()
-                # Skip retweets
                 if not title or not link or title.startswith('RT by'):
                     continue
-                # Rewrite nitter link → real X link
                 link = link.replace(instance, 'x.com')
                 tweets.append((f'@{account}', title, link))
                 break
@@ -120,25 +119,66 @@ def fetch_tweets(instance, cutoff):
     return tweets[:15]
 
 
-def build_message(sections, tweets):
-    now = datetime.now(timezone.utc)
-    date_str = f"{DAYS_ES[now.weekday()]} {now.day} {MONTHS_ES[now.month - 1]}"
+def build_gemini_input(sections, tweets):
+    text = ""
+    for section_name, items in sections.items():
+        if items:
+            text += f"\n{section_name}:\n"
+            for title, _, source in items:
+                text += f"- {title} ({source})\n"
+    if tweets:
+        text += "\nDESDE X (analistas financieros):\n"
+        for account, tweet_text, _ in tweets:
+            text += f"- {account}: {tweet_text[:150]}\n"
+    return text
 
-    lines = [f'<b>📊 RESUMEN DIARIO — {date_str}</b>\n']
 
+def analyze_with_gemini(sections, tweets):
+    genai.configure(api_key=GEMINI_API_KEY)
+    model = genai.GenerativeModel('gemini-1.5-flash')
+
+    news_input = build_gemini_input(sections, tweets)
+
+    prompt = f"""Eres un analista financiero experto. Basándote en estas noticias de hoy, escribe un resumen ejecutivo en español con exactamente este formato:
+
+🌍 MACROECONOMÍA
+[Estado general del mercado macro hoy. 2-3 líneas. Menciona posibles consecuencias para inversores europeos y españoles.]
+
+📈 MERCADOS
+[Estado de mercados europeos (IBEX, DAX, CAC) y americanos (S&P 500, Nasdaq, TSX). 2-3 líneas. Qué esperar hoy.]
+
+₿ CRIPTO
+[Estado general de BTC, ETH, SOL y BNB. Tendencia del mercado cripto. 2-3 líneas.]
+
+🏛 POLÍTICA / MACRO GLOBAL
+[Noticias políticas relevantes para los mercados hoy. 1-2 líneas.]
+
+💡 CONCLUSIÓN
+[Tono general del mercado: ¿día de riesgo o precaución? ¿Qué vigilar hoy? 2 líneas máximo.]
+
+Sé directo, concreto y práctico. Sin rodeos. Noticias del día:
+
+{news_input}"""
+
+    response = model.generate_content(prompt)
+    return response.text
+
+
+def build_sources_block(sections, tweets):
+    lines = ['\n📰 <b>FUENTES</b>']
     for section_name, items in sections.items():
         if not items:
             continue
-        lines.append(f'\n<b>{section_name}</b>')
+        emoji = {'MACROECONOMÍA': '🌍', 'MERCADOS': '📈',
+                 'CRIPTO': '₿', 'POLÍTICA / EEUU': '🏛'}.get(section_name, '•')
+        lines.append(f'\n<i>{emoji} {section_name}</i>')
         for title, link, source in items:
             lines.append(f'• <a href="{link}">{escape_html(title)}</a> <i>({source})</i>')
-
     if tweets:
-        lines.append('\n<b>🐦 LO QUE DICEN EN X</b>')
+        lines.append('\n<i>🐦 X</i>')
         for account, text, link in tweets:
-            short = escape_html(text[:110] + ('…' if len(text) > 110 else ''))
+            short = escape_html(text[:100] + ('…' if len(text) > 100 else ''))
             lines.append(f'• <b>{account}</b>: <a href="{link}">{short}</a>')
-
     return '\n'.join(lines)
 
 
@@ -154,7 +194,6 @@ def send_telegram(text):
 
 
 def send_long(message):
-    """Split message at newline if it exceeds Telegram's 4096-char limit."""
     if len(message) <= 4000:
         send_telegram(message)
         return
@@ -177,7 +216,15 @@ def main():
     if nitter:
         tweets = fetch_tweets(nitter, cutoff)
 
-    message = build_message(sections, tweets)
+    now = datetime.now(timezone.utc)
+    date_str = f"{DAYS_ES[now.weekday()]} {now.day} {MONTHS_ES[now.month - 1]}"
+
+    analysis = analyze_with_gemini(sections, tweets)
+    sources  = build_sources_block(sections, tweets)
+
+    header  = f'<b>📊 RESUMEN DIARIO — {date_str}</b>\n'
+    message = header + '\n' + analysis + '\n' + sources
+
     send_long(message)
     print('Digest enviado.')
 
