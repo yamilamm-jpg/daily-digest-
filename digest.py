@@ -135,7 +135,7 @@ def build_gemini_input(sections, tweets):
 
 def analyze_with_gemini(sections, tweets):
     genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-2.0-flash')
 
     news_input = build_gemini_input(sections, tweets)
 
